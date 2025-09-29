@@ -3,6 +3,7 @@ from tqdm import tqdm
 import pandas as pd
 import numpy as np
 import glob
+import sys
 from typing import Iterator, Tuple, Union
 
 
@@ -139,3 +140,25 @@ def generate_random_top_sequences_df(n_seq: int = 50000) -> pd.DataFrame:
         'importance_score': np.random.rand(n_seq)
     }
     return pd.DataFrame(data)
+
+def validate_dirs_and_files(train_dir: str, test_dir: str, out_dir: str) -> None:
+    assert os.path.isdir(train_dir), f"Train directory `{train_dir}` does not exist."
+    train_tsvs = glob.glob(os.path.join(train_dir, "*.tsv"))
+    assert train_tsvs, f"No .tsv files found in train directory `{train_dir}`."
+    metadata_path = os.path.join(train_dir, "metadata.csv")
+    assert os.path.isfile(metadata_path), f"`metadata.csv` not found in train directory `{train_dir}`."
+
+    assert os.path.isdir(test_dir), f"Test directory `{test_dir}` does not exist."
+    test_tsvs = glob.glob(os.path.join(test_dir, "*.tsv"))
+    assert test_tsvs, f"No .tsv files found in test directory `{test_dir}`."
+
+    assert not os.path.exists(out_dir), f"Output directory `{out_dir}` already exists."
+    try:
+        os.makedirs(out_dir)
+        test_file = os.path.join(out_dir, "test_write_permission.tmp")
+        with open(test_file, "w") as f:
+            f.write("test")
+        os.remove(test_file)
+    except Exception as e:
+        print(f"Failed to create or write to output directory `{out_dir}`: {e}")
+        sys.exit(1)

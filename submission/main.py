@@ -1,10 +1,11 @@
 import os
 import argparse
 from submission.predictor import ImmuneStatePredictor
-from submission.utils import save_tsv
+from submission.utils import save_tsv, validate_dirs_and_files
 
 
 def main(train_dir: str, test_dir: str, out_dir: str, n_jobs: int, device: str) -> None:
+    validate_dirs_and_files(train_dir, test_dir, out_dir)
     predictor = ImmuneStatePredictor(n_jobs=n_jobs, device=device)  # instantiate with any other parameters as defined by you in the class
     print(f"Fitting model on examples in ` {train_dir} `...")
     predictor.fit(train_dir)
