@@ -29,7 +29,7 @@ def test_validate_dirs_and_files_valid():
         out_dir = os.path.join(tmp, "out")
         create_dir_with_tsv_and_metadata(train_dir)
         create_dir_with_tsv(test_dir)
-        validate_dirs_and_files(train_dir, test_dir, out_dir)
+        validate_dirs_and_files(train_dir, [test_dir], out_dir)
         assert os.path.isdir(out_dir)
 
 
@@ -40,7 +40,7 @@ def test_missing_train_dir():
         out_dir = os.path.join(tmp, "out")
         create_dir_with_tsv(test_dir)
         with pytest.raises(AssertionError):
-            validate_dirs_and_files(train_dir, test_dir, out_dir)
+            validate_dirs_and_files(train_dir, [test_dir], out_dir)
 
 
 def test_missing_test_dir():
@@ -50,7 +50,7 @@ def test_missing_test_dir():
         out_dir = os.path.join(tmp, "out")
         create_dir_with_tsv_and_metadata(train_dir)
         with pytest.raises(AssertionError):
-            validate_dirs_and_files(train_dir, test_dir, out_dir)
+            validate_dirs_and_files(train_dir, [test_dir], out_dir)
 
 
 def test_missing_metadata():
@@ -61,7 +61,7 @@ def test_missing_metadata():
         create_dir_with_tsv(train_dir)
         create_dir_with_tsv(test_dir)
         with pytest.raises(AssertionError):
-            validate_dirs_and_files(train_dir, test_dir, out_dir)
+            validate_dirs_and_files(train_dir, [test_dir], out_dir)
 
 
 def test_no_tsv_in_train():
@@ -74,7 +74,7 @@ def test_no_tsv_in_train():
             f.write("repertoire_id,filename,label_positive\nrep1,file0.tsv,1\n")
         create_dir_with_tsv(test_dir)
         with pytest.raises(AssertionError):
-            validate_dirs_and_files(train_dir, test_dir, out_dir)
+            validate_dirs_and_files(train_dir, [test_dir], out_dir)
 
 
 def test_no_tsv_in_test():
@@ -85,7 +85,7 @@ def test_no_tsv_in_test():
         create_dir_with_tsv_and_metadata(train_dir)
         os.makedirs(test_dir, exist_ok=True)
         with pytest.raises(AssertionError):
-            validate_dirs_and_files(train_dir, test_dir, out_dir)
+            validate_dirs_and_files(train_dir, [test_dir], out_dir)
 
 
 def test_out_dir_exists():
@@ -97,7 +97,7 @@ def test_out_dir_exists():
         create_dir_with_tsv(test_dir)
         os.makedirs(out_dir, exist_ok=True)
         with pytest.raises(AssertionError):
-            validate_dirs_and_files(train_dir, test_dir, out_dir)
+            validate_dirs_and_files(train_dir, [test_dir], out_dir)
 
 
 def test_out_dir_no_write_permission():
@@ -112,7 +112,6 @@ def test_out_dir_no_write_permission():
         os.chmod(no_write_dir, 0o400)  # Remove write permission
         try:
             with pytest.raises(SystemExit):
-                validate_dirs_and_files(train_dir, test_dir, out_dir)
+                validate_dirs_and_files(train_dir, [test_dir], out_dir)
         finally:
             os.chmod(no_write_dir, 0o700)  # Restore permissions for cleanup
-

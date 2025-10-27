@@ -4,7 +4,7 @@ import pandas as pd
 import numpy as np
 import glob
 import sys
-from typing import Iterator, Tuple, Union
+from typing import Iterator, Tuple, Union, List
 
 
 def load_data_generator(data_dir: str, metadata_filename='metadata.csv') -> Iterator[
@@ -141,16 +141,17 @@ def generate_random_top_sequences_df(n_seq: int = 50000) -> pd.DataFrame:
     }
     return pd.DataFrame(data)
 
-def validate_dirs_and_files(train_dir: str, test_dir: str, out_dir: str) -> None:
+def validate_dirs_and_files(train_dir: str, test_dirs: List[str], out_dir: str) -> None:
     assert os.path.isdir(train_dir), f"Train directory `{train_dir}` does not exist."
     train_tsvs = glob.glob(os.path.join(train_dir, "*.tsv"))
     assert train_tsvs, f"No .tsv files found in train directory `{train_dir}`."
     metadata_path = os.path.join(train_dir, "metadata.csv")
     assert os.path.isfile(metadata_path), f"`metadata.csv` not found in train directory `{train_dir}`."
 
-    assert os.path.isdir(test_dir), f"Test directory `{test_dir}` does not exist."
-    test_tsvs = glob.glob(os.path.join(test_dir, "*.tsv"))
-    assert test_tsvs, f"No .tsv files found in test directory `{test_dir}`."
+    for test_dir in test_dirs:
+        assert os.path.isdir(test_dir), f"Test directory `{test_dir}` does not exist."
+        test_tsvs = glob.glob(os.path.join(test_dir, "*.tsv"))
+        assert test_tsvs, f"No .tsv files found in test directory `{test_dir}`."
 
     assert not os.path.exists(out_dir), f"Output directory `{out_dir}` already exists."
     try:

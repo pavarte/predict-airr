@@ -77,13 +77,13 @@ class ImmuneStatePredictor:
 
     def predict_proba(self, test_dir_path: str) -> pd.DataFrame:
         """
-        Predicts probabilities for the test data.
+        Predicts probabilities for examples in the provided path.
 
         Args:
             test_dir_path (str): Path to the directory with test TSV files.
 
         Returns:
-            pd.DataFrame: A DataFrame with 'sample_id' and 'probability' columns.
+            pd.DataFrame: A DataFrame with 'ID', 'dataset', and 'label_positive_probability' columns.
         """
         print(f"Making predictions for data in {test_dir_path}...")
         if self.model is None:
@@ -110,7 +110,7 @@ class ImmuneStatePredictor:
             'label_positive_probability': probabilities
         })
 
-        print("Prediction complete.")
+        print(f"Prediction complete on {len(repertoire_ids)} examples in {test_dir_path}.")
         return predictions_df
 
     def identify_associated_sequences(self, dataset_name: str, top_k: int = 50000) -> pd.DataFrame:
