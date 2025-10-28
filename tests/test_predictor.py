@@ -23,7 +23,7 @@ def test_environment():
     for i in range(1, 4):
         df = pd.DataFrame({
             'junction_aa': [f'SEQ{j}' for j in range(5)],
-            'v_call': ['V1'] * 5, 'j_call': ['J1'] * 5,
+            'v_call': ['V1'] * 5, 'j_call': ['J1'] * 5, 'label_positive': [1 if j % 2 == 0 else 0 for j in range(5)]
         })
         df.to_csv(os.path.join(train_data_dir, f"sample_{i}.tsv"), sep='\t', index=False)
 
@@ -74,7 +74,7 @@ def test_predict_proba_returns_correct_format_after_fit(test_environment):
     predictions_df = predictor.predict_proba(test_dir_path=test_environment["test_dir"])
     assert isinstance(predictions_df, pd.DataFrame), "Output should be a pandas DataFrame."
 
-    expected_cols = ['ID', 'dataset', 'label_positive_probability']
+    expected_cols = ['ID', 'dataset', 'label_positive_probability', 'junction_aa', 'v_call', 'j_call']
     assert list(predictions_df.columns) == expected_cols
 
     assert len(predictions_df) == 2, "Output should have one row per test sample."
@@ -83,13 +83,17 @@ def test_predict_proba_returns_correct_format_after_fit(test_environment):
     assert (predictions_df['label_positive_probability'] >= 0).all()
     assert (predictions_df['label_positive_probability'] <= 1).all()
 
+    assert (predictions_df['junction_aa'] == -999.0).all(), "All junction_aa values should be -999.0"
+    assert (predictions_df['v_call'] == -999.0).all(), "All v_call values should be -999.0"
+    assert (predictions_df['j_call'] == -999.0).all(), "All j_call values should be -999.0"
+
 
 def test_identify_associated_sequences_returns_correct_format(test_environment):
     """Test the output format of identify_associated_sequences."""
     predictor = ImmuneStatePredictor()
     predictor.fit(train_dir_path=test_environment["train_dir"])
 
-    top_k = 10
+    top_k = 5
     dataset_name = os.path.basename(test_environment["train_dir"])
     top_seq_df = predictor.identify_associated_sequences(top_k=top_k, dataset_name=dataset_name)
 

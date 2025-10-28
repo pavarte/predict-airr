@@ -83,7 +83,7 @@ class ImmuneStatePredictor:
             test_dir_path (str): Path to the directory with test TSV files.
 
         Returns:
-            pd.DataFrame: A DataFrame with 'ID', 'dataset', and 'label_positive_probability' columns.
+            pd.DataFrame: A DataFrame with 'ID', 'dataset', 'label_positive_probability', 'junction_aa', 'v_call', 'j_call' columns.
         """
         print(f"Making predictions for data in {test_dir_path}...")
         if self.model is None:
@@ -109,6 +109,13 @@ class ImmuneStatePredictor:
             'dataset': [os.path.basename(test_dir_path)] * len(repertoire_ids),
             'label_positive_probability': probabilities
         })
+
+        # to enable compatibility with the expected output format that includes junction_aa, v_call, j_call columns
+        predictions_df['junction_aa'] = -999.0
+        predictions_df['v_call'] = -999.0
+        predictions_df['j_call'] = -999.0
+
+        predictions_df = predictions_df[['ID', 'dataset', 'label_positive_probability', 'junction_aa', 'v_call', 'j_call']]
 
         print(f"Prediction complete on {len(repertoire_ids)} examples in {test_dir_path}.")
         return predictions_df

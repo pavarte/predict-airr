@@ -88,18 +88,6 @@ def test_no_tsv_in_test():
             validate_dirs_and_files(train_dir, [test_dir], out_dir)
 
 
-def test_out_dir_exists():
-    with tempfile.TemporaryDirectory() as tmp:
-        train_dir = os.path.join(tmp, "train")
-        test_dir = os.path.join(tmp, "test")
-        out_dir = os.path.join(tmp, "out")
-        create_dir_with_tsv_and_metadata(train_dir)
-        create_dir_with_tsv(test_dir)
-        os.makedirs(out_dir, exist_ok=True)
-        with pytest.raises(AssertionError):
-            validate_dirs_and_files(train_dir, [test_dir], out_dir)
-
-
 def test_out_dir_no_write_permission():
     with tempfile.TemporaryDirectory() as tmp:
         train_dir = os.path.join(tmp, "train")

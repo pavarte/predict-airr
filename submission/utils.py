@@ -153,9 +153,8 @@ def validate_dirs_and_files(train_dir: str, test_dirs: List[str], out_dir: str) 
         test_tsvs = glob.glob(os.path.join(test_dir, "*.tsv"))
         assert test_tsvs, f"No .tsv files found in test directory `{test_dir}`."
 
-    assert not os.path.exists(out_dir), f"Output directory `{out_dir}` already exists."
     try:
-        os.makedirs(out_dir)
+        os.makedirs(out_dir, exist_ok=True)
         test_file = os.path.join(out_dir, "test_write_permission.tmp")
         with open(test_file, "w") as f:
             f.write("test")
