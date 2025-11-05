@@ -1,6 +1,5 @@
-# replace these with your own dependencies and versions
-pytest~=8.4.2
-pandas~=2.3.2
-numpy~=2.3.2
-tqdm~=4.67.1
-torch~=2.8.0
+pandas==2.2.2
+numpy==1.26.4
+scikit-learn==1.5.2
+scipy==1.13.1
+joblib==1.4.2
