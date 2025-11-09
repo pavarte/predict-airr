@@ -39,16 +39,17 @@ def load_data_generator(data_dir: str, metadata_filename='metadata.csv') -> Iter
                 print(f"Warning: File '{row.filename}' listed in metadata not found. Skipping.")
                 continue
     else:
-        search_pattern = os.path.join(data_dir, '*.tsv')
-        tsv_files = glob.glob(search_pattern)
-        for file_path in sorted(tsv_files):
-            try:
-                filename = os.path.basename(file_path)
-                repertoire_df = pd.read_csv(file_path, sep='\t')
-                yield filename, repertoire_df
-            except Exception as e:
-                print(f"Warning: Could not read file '{file_path}'. Error: {e}. Skipping.")
-                continue
+        # Search recursively so nested structures are supported
+        for root, _, files in os.walk(data_dir):
+            for f in sorted(files):
+                if f.endswith('.tsv'):
+                    file_path = os.path.join(root, f)
+                    try:
+                        repertoire_df = pd.read_csv(file_path, sep='\t')
+                        yield os.path.basename(file_path), repertoire_df
+                    except Exception as e:
+                        print(f"Warning: Could not read file '{file_path}'. Error: {e}. Skipping.")
+                        continue
 
 
 def load_full_dataset(data_dir: str) -> pd.DataFrame:
@@ -58,14 +59,8 @@ def load_full_dataset(data_dir: str) -> pd.DataFrame:
     This function handles two scenarios:
     1. If metadata.csv exists, it loads data based on the metadata and adds
        'repertoire_id' and 'label_positive' columns.
-    2. If metadata.csv does not exist, it loads all .tsv files and adds
-       a 'filename' column as an identifier.
-
-    Args:
-        data_dir (str): The path to the data directory.
-
-    Returns:
-        pd.DataFrame: A single, concatenated DataFrame containing all the data.
+    2. If metadata.csv does not exist, it loads all .tsv files (recursively)
+       and adds a 'filename' column as an identifier.
     """
     metadata_path = os.path.join(data_dir, 'metadata.csv')
     df_list = []
@@ -79,10 +74,12 @@ def load_full_dataset(data_dir: str) -> pd.DataFrame:
             data_df['label_positive'] = label
             df_list.append(data_df)
     else:
-        search_pattern = os.path.join(data_dir, '*.tsv')
-        total_files = len(glob.glob(search_pattern))
-        for filename, data_df in tqdm(data_loader, total=total_files, desc="Loading files"):
-            data_df['ID'] = os.path.basename(filename).replace(".tsv", "")
+        # recursive count for progress bar
+        total_files = sum(1 for _root, _dirs, files in os.walk(data_dir) for f in files if f.endswith('.tsv'))
+        for item in tqdm(data_loader, total=total_files, desc="Loading files"):
+            filename, data_df = item
+            rep_id = os.path.basename(filename).replace('.tsv', '')
+            data_df['ID'] = rep_id
             df_list.append(data_df)
 
     if not df_list:
@@ -94,17 +91,7 @@ def load_full_dataset(data_dir: str) -> pd.DataFrame:
 
 
 def load_and_encode_kmers(data_dir: str, k: int = 3) -> Tuple[pd.DataFrame, pd.DataFrame]:
-    """
-    Loading and k-mer encoding of repertoire data.
-
-    Args:
-        data_dir: Path to data directory
-        k: K-mer length
-
-    Returns:
-        Tuple of (encoded_features_df, metadata_df)
-        metadata_df always contains 'ID', and 'label_positive' if available
-    """
+    """Loading and k-mer encoding of repertoire data."""
     from collections import Counter
 
     metadata_path = os.path.join(data_dir, 'metadata.csv')
@@ -113,36 +100,30 @@ def load_and_encode_kmers(data_dir: str, k: int = 3) -> Tuple[pd.DataFrame, pd.D
     repertoire_features = []
     metadata_records = []
 
-    search_pattern = os.path.join(data_dir, '*.tsv')
-    total_files = len(glob.glob(search_pattern))
+    total_files = sum(1 for _root, _dirs, files in os.walk(data_dir) for f in files if f.endswith('.tsv'))
 
     for item in tqdm(data_loader, total=total_files, desc=f"Encoding {k}-mers"):
         if os.path.exists(metadata_path):
             rep_id, data_df, label = item
         else:
             filename, data_df = item
-            rep_id = os.path.basename(filename).replace(".tsv", "")
+            rep_id = os.path.basename(filename).replace('.tsv', '')
             label = None
 
         kmer_counts = Counter()
-        for seq in data_df['junction_aa'].dropna():
+        for seq in data_df.get('junction_aa', pd.Series(dtype=str)).dropna():
             for i in range(len(seq) - k + 1):
                 kmer_counts[seq[i:i + k]] += 1
 
-        repertoire_features.append({
-            'ID': rep_id,
-            **kmer_counts
-        })
+        repertoire_features.append({'ID': rep_id, **kmer_counts})
 
-        metadata_record = {'ID': rep_id}
+        meta_rec = {'ID': rep_id}
         if label is not None:
-            metadata_record['label_positive'] = label
-        metadata_records.append(metadata_record)
-
-        del data_df, kmer_counts
+            meta_rec['label_positive'] = label
+        metadata_records.append(meta_rec)
 
     features_df = pd.DataFrame(repertoire_features).fillna(0).set_index('ID')
-    features_df.fillna(0)
+    features_df = features_df.fillna(0)
     metadata_df = pd.DataFrame(metadata_records)
 
     return features_df, metadata_df
@@ -154,41 +135,28 @@ def save_tsv(df: pd.DataFrame, path: str):
 
 
 def get_repertoire_ids(data_dir: str) -> list:
-    """
-    Retrieves repertoire IDs from the metadata file or filenames in the directory.
-
-    Args:
-        data_dir (str): The path to the data directory.
-
-    Returns:
-        list: A list of repertoire IDs.
-    """
+    """Retrieves repertoire IDs from metadata or filenames (recursively)."""
     metadata_path = os.path.join(data_dir, 'metadata.csv')
 
     if os.path.exists(metadata_path):
         metadata_df = pd.read_csv(metadata_path)
         repertoire_ids = metadata_df['repertoire_id'].tolist()
     else:
-        search_pattern = os.path.join(data_dir, '*.tsv')
-        tsv_files = glob.glob(search_pattern)
-        repertoire_ids = [os.path.basename(f).replace('.tsv', '') for f in sorted(tsv_files)]
+        repertoire_ids = []
+        for root, _dirs, files in os.walk(data_dir):
+            for f in sorted(files):
+                if f.endswith('.tsv'):
+                    repertoire_ids.append(os.path.splitext(f)[0])
 
     return repertoire_ids
 
 
 def generate_random_top_sequences_df(n_seq: int = 50000) -> pd.DataFrame:
-    """
-    Generates a random DataFrame simulating top important sequences.
-
-    Args:
-        n_seq (int): Number of sequences to generate.
-
-    Returns:
-        pd.DataFrame: A DataFrame with columns 'ID', 'dataset', 'junction_aa', 'v_call', 'j_call'.
-    """
+    """Generates a random DataFrame simulating top important sequences."""
     seqs = set()
+    alphabet = list('ACDEFGHIKLMNPQRSTVWY')
     while len(seqs) < n_seq:
-        seq = ''.join(np.random.choice(list('ACDEFGHIKLMNPQRSTVWY'), size=15))
+        seq = ''.join(np.random.choice(alphabet, size=15))
         seqs.add(seq)
     data = {
         'junction_aa': list(seqs),
@@ -200,17 +168,34 @@ def generate_random_top_sequences_df(n_seq: int = 50000) -> pd.DataFrame:
 
 
 def validate_dirs_and_files(train_dir: str, test_dirs: List[str], out_dir: str) -> None:
+    """Directory validation that supports nested dataset structures."""
     assert os.path.isdir(train_dir), f"Train directory `{train_dir}` does not exist."
-    train_tsvs = glob.glob(os.path.join(train_dir, "*.tsv"))
-    assert train_tsvs, f"No .tsv files found in train directory `{train_dir}`."
-    metadata_path = os.path.join(train_dir, "metadata.csv")
-    assert os.path.isfile(metadata_path), f"`metadata.csv` not found in train directory `{train_dir}`."
 
+    # Recursively ensure there is at least one .tsv somewhere under train_dir
+    has_train_tsv = any(
+        f.endswith('.tsv')
+        for root, _dirs, files in os.walk(train_dir)
+        for f in files
+    )
+    assert has_train_tsv, f"No .tsv files found anywhere under train directory `{train_dir}`."
+
+    # metadata.csv must exist in each train_dataset_* folder (not necessarily at root)
+    train_subs = [os.path.join(train_dir, d) for d in os.listdir(train_dir) if d.startswith('train_dataset_') and os.path.isdir(os.path.join(train_dir, d))]
+    assert train_subs, f"No train_dataset_* folders found under `{train_dir}`."
+    missing_meta = [d for d in train_subs if not os.path.isfile(os.path.join(d, 'metadata.csv'))]
+    assert not missing_meta, f"Missing metadata.csv in: {missing_meta}"
+
+    # Validate each provided test dir recursively
     for test_dir in test_dirs:
         assert os.path.isdir(test_dir), f"Test directory `{test_dir}` does not exist."
-        test_tsvs = glob.glob(os.path.join(test_dir, "*.tsv"))
-        assert test_tsvs, f"No .tsv files found in test directory `{test_dir}`."
+        has_test_tsv = any(
+            f.endswith('.tsv')
+            for root, _dirs, files in os.walk(test_dir)
+            for f in files
+        )
+        assert has_test_tsv, f"No .tsv files found anywhere under test directory `{test_dir}`."
 
+    # out_dir writability check
     try:
         os.makedirs(out_dir, exist_ok=True)
         test_file = os.path.join(out_dir, "test_write_permission.tmp")
@@ -223,22 +208,7 @@ def validate_dirs_and_files(train_dir: str, test_dirs: List[str], out_dir: str) 
 
 
 def concatenate_output_files(out_dir: str) -> None:
-    """
-    Concatenates all test predictions and important sequences TSV files from the output directory.
-
-    This function finds all files matching the patterns:
-    - *_test_predictions.tsv
-    - *_important_sequences.tsv
-
-    and concatenates them to match the expected output format of submissions.csv.
-
-    Args:
-        out_dir (str): Path to the output directory containing the TSV files.
-
-    Returns:
-        pd.DataFrame: Concatenated DataFrame with predictions followed by important sequences.
-                     Columns: ['ID', 'dataset', 'label_positive_probability', 'junction_aa', 'v_call', 'j_call']
-    """
+    """Concatenate per-dataset outputs to submissions.csv (unchanged)."""
     predictions_pattern = os.path.join(out_dir, '*_test_predictions.tsv')
     sequences_pattern = os.path.join(out_dir, '*_important_sequences.tsv')
 
@@ -277,16 +247,18 @@ def concatenate_output_files(out_dir: str) -> None:
 def get_dataset_pairs(train_dir: str, test_dir: str) -> List[Tuple[str, List[str]]]:
     """Returns list of (train_path, [test_paths]) tuples for dataset pairs."""
     test_groups = defaultdict(list)
-    for test_name in sorted(os.listdir(test_dir)):
-        if test_name.startswith("test_dataset_"):
-            base_id = test_name.replace("test_dataset_", "").split("_")[0]
-            test_groups[base_id].append(os.path.join(test_dir, test_name))
+    if os.path.isdir(test_dir):
+        for test_name in sorted(os.listdir(test_dir)):
+            tpath = os.path.join(test_dir, test_name)
+            if os.path.isdir(tpath) and test_name.startswith("test_dataset_"):
+                base_id = test_name.replace("test_dataset_", "").split("_")[0]
+                test_groups[base_id].append(tpath)
 
     pairs = []
     for train_name in sorted(os.listdir(train_dir)):
-        if train_name.startswith("train_dataset_"):
+        tpath = os.path.join(train_dir, train_name)
+        if os.path.isdir(tpath) and train_name.startswith("train_dataset_"):
             train_id = train_name.replace("train_dataset_", "")
-            train_path = os.path.join(train_dir, train_name)
-            pairs.append((train_path, test_groups.get(train_id, [])))
+            pairs.append((tpath, test_groups.get(train_id, [])))
 
     return pairs
